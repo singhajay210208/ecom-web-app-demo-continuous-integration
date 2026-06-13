@@ -1,10 +1,10 @@
-name: CI/CD
+name: CI/CD pipeline
 on:
   push:
     branches:
       - main
 jobs:
-  build:
+  build-and-push:
     name: Build and Push Docker image to Docker Hub
     runs-on: ubuntu-latest
     steps:
@@ -15,50 +15,31 @@ jobs:
         uses: docker/login-action@v3
         with:
           username: ${{secrets.DOCKERHUB_USERNAME}}
-          password: ${{secrets.DOCKERHUB_TOKEN}}
+          password: ${{secrets.DOCKERHUB_PASSWORD}}
 
       - name: Build and Push Docker image to Repository
         uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: |
-            ${{secrets.DOCKERHUB_USERNAME}}/demo-cicd:latest
-            ${{secrets.DOCKERHUB_USERNAME}}/demo-cicd:${{ github.sha }}
+          tags: ${{secrets.DOCKERHUB_USERNAME}}/demo-cicd:latest
 
-      
-      - name: Checkout Deployment Repository
-        uses: actions/checkout@v4
-        with:
-          repository: sarubhai/demo_cd
-          token: ${{ secrets.GH_PAT }}
-          path: deploy-repo
+  deploy-dev:
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: dev
 
-      - name: Modify deployment.yml with the latest image
-        working-directory: deploy-repo
-        run: |
-          # Remove Topics.csv from remote repo
-          IMAGE_TAG="${{ secrets.DOCKERHUB_USERNAME }}/demo-cicd:${{ github.sha }}"
-          sed -i "s|image:.*|image: ${IMAGE_TAG}|g" kubernetes/deployment.yaml
+    steps:
+      - name: Dev pr deploy
+        run: echo "Dev environment par deploy ho gya!"
 
-          # Commit changes to Deployment Repository
-          git config --local user.name "GitHub Action"
-          git config --local user.email "action@github.com"
-          dt=$(date '+%Y-%m-%d')
-          git add -A
-          git commit -m "Automated Deployment- $dt"
-          
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          token: ${{ secrets.GH_PAT }}
-          path: deploy-repo
-          branch: feature-new-deployment-config
+  deploy-prod:
+    runs-on: ubuntu-latest
+    needs: deploy-dev
+    environment: prod
 
-      - name: Merge Pull Request
-        working-directory: deploy-repo
-        run: |
-          git merge feature-new-deployment-config
-          git push -u origin main
-          git branch -d feature-new-deployment-config
-          git push --delete origin feature-new-deployment-config
+    steps:
+      - name: Prod par deploy
+        run: echo "Prod environment par deploy ho gya!"
+
+
